@@ -16,28 +16,28 @@ type Vector3 [3]float64 // Directly embed the floats
 
 // Add two vectors.  Inline to avoid function call overhead.
 //
-//go:noinline
+//go:inline
 func add(v1, v2 Vector3) Vector3 {
 	return Vector3{v1[0] + v2[0], v1[1] + v2[1], v1[2] + v2[2]}
 }
 
 // Sub subtracts two vectors.
 //
-//go:noinline
+//go:inline
 func sub(v1, v2 Vector3) Vector3 {
 	return Vector3{v1[0] - v2[0], v1[1] - v2[1], v1[2] - v2[2]}
 }
 
 // MulScalar multiplies a vector by a scalar.
 //
-//go:noinline
+//go:inline
 func mulScalar(v Vector3, s float64) Vector3 {
 	return Vector3{v[0] * s, v[1] * s, v[2] * s}
 }
 
 // MagnitudeSquared returns the squared magnitude of a vector.
 //
-//go:noinline
+//go:inline
 func magnitudeSquared(v Vector3) float64 {
 	return v[0]*v[0] + v[1]*v[1] + v[2]*v[2]
 }
@@ -124,8 +124,12 @@ func (s *Simulation) ComputeForcesSequential() {
 				continue
 			}
 
-			forceMag := s.G * s.Bodies[i].Mass * s.Bodies[j].Mass / rSquared
-			forceVec := mulScalar(normalize(rVec), forceMag)
+			// Optimization: Calculate inverse distance once
+			invDist := 1.0 / math.Sqrt(rSquared)
+			forceMag := s.G * s.Bodies[i].Mass * s.Bodies[j].Mass * invDist * invDist
+
+			// Optimization: Avoid normalize by using invDist directly
+			forceVec := mulScalar(rVec, forceMag*invDist)
 
 			s.Bodies[i].Force = add(s.Bodies[i].Force, forceVec)
 			s.Bodies[j].Force = sub(s.Bodies[j].Force, forceVec)
@@ -133,7 +137,7 @@ func (s *Simulation) ComputeForcesSequential() {
 	}
 }
 
-// ComputeForcesParallel computes forces in parallel using goroutines.
+// ComputeForcesParallel computes forces in parallel using goroutines with optimized work distribution.
 func (s *Simulation) ComputeForcesParallel() {
 	numCPU := runtime.NumCPU()
 	var wg sync.WaitGroup
@@ -141,69 +145,68 @@ func (s *Simulation) ComputeForcesParallel() {
 
 	// Reset forces
 	for i := 0; i < s.NumBodies; i++ {
-		s.Bodies[i].Force = Vector3{0, 0, 0} // Reset forces at the beginning.
+		s.Bodies[i].Force = Vector3{0, 0, 0}
 	}
 
-	// Use channels to distribute work to goroutines.
-	jobs := make(chan [2]int, s.NumBodies*(s.NumBodies-1)/2)    // All pairs (i, j) where j > i.
-	results := make(chan [3]int, s.NumBodies*(s.NumBodies-1)/2) // (i, j, sign)
+	// Optimization: Use static block partitioning for better work distribution
+	blockSize := s.NumBodies / numCPU
+	if blockSize == 0 {
+		blockSize = 1
+	}
 
-	// Create worker goroutines.
 	for w := 0; w < numCPU; w++ {
-		go func() {
+		go func(workerID int) {
 			defer wg.Done()
-			for job := range jobs {
-				i, j := job[0], job[1]
-				rVec := sub(s.Bodies[j].Position, s.Bodies[i].Position)
-				rSquared := magnitudeSquared(rVec)
-				if rSquared < 1e-20 {
-					results <- [3]int{i, j, 0} // Indicate no force.
-					continue
-				}
 
-				forceMag := s.G * s.Bodies[i].Mass * s.Bodies[j].Mass / rSquared
-				forceVec := mulScalar(normalize(rVec), forceMag)
-
-				// Use mutex for thread-safe updates instead of atomic operations
-				// This is simpler and more reliable for this use case
-				results <- [3]int{i, j, 0} // Placeholder for result counting
-
-				// Update forces using mutex
-				var mutex sync.Mutex
-				mutex.Lock()
-				s.Bodies[i].Force[0] += forceVec[0]
-				s.Bodies[i].Force[1] += forceVec[1]
-				s.Bodies[i].Force[2] += forceVec[2]
-				s.Bodies[j].Force[0] -= forceVec[0]
-				s.Bodies[j].Force[1] -= forceVec[1]
-				s.Bodies[j].Force[2] -= forceVec[2]
-				mutex.Unlock()
+			// Determine this worker's block of bodies
+			start := workerID * blockSize
+			end := start + blockSize
+			if workerID == numCPU-1 {
+				end = s.NumBodies // Last worker takes any remainder
 			}
-		}()
+
+			// Local force accumulators to avoid mutex contention
+			localForces := make([]Vector3, s.NumBodies)
+
+			// Process all pairs where i is in this worker's block
+			for i := start; i < end; i++ {
+				for j := i + 1; j < s.NumBodies; j++ {
+					rVec := sub(s.Bodies[j].Position, s.Bodies[i].Position)
+					rSquared := magnitudeSquared(rVec)
+					if rSquared < 1e-20 {
+						continue
+					}
+
+					// Optimization: Calculate inverse distance once
+					invDist := 1.0 / math.Sqrt(rSquared)
+					forceMag := s.G * s.Bodies[i].Mass * s.Bodies[j].Mass * invDist * invDist
+
+					// Optimization: Avoid normalize by using invDist directly
+					forceVec := mulScalar(rVec, forceMag*invDist)
+
+					// Accumulate forces locally
+					localForces[i] = add(localForces[i], forceVec)
+					localForces[j] = sub(localForces[j], forceVec)
+				}
+			}
+
+			// Apply accumulated forces at the end with a single lock
+			var mutex sync.Mutex
+			mutex.Lock()
+			for i := 0; i < s.NumBodies; i++ {
+				s.Bodies[i].Force = add(s.Bodies[i].Force, localForces[i])
+			}
+			mutex.Unlock()
+		}(w)
 	}
 
-	// Feed jobs to the channel. This is the producer.
-	for i := 0; i < s.NumBodies; i++ {
-		for j := i + 1; j < s.NumBodies; j++ {
-			jobs <- [2]int{i, j}
-		}
-	}
-	close(jobs)
-
-	// Consume all results
-	for a := 0; a < s.NumBodies*(s.NumBodies-1)/2; a++ {
-		<-results
-	}
-
-	// Wait for workers to finish.
+	// Wait for all workers to finish
 	wg.Wait()
-
-	close(results)
 }
 
 // UpdatePositionsAndVelocities updates the positions and velocities.
 //
-//go:noinline //helps the compiler
+//go:inline
 func (s *Simulation) UpdatePositionsAndVelocities() {
 	for i := range s.Bodies {
 		acc := mulScalar(s.Bodies[i].Force, 1.0/s.Bodies[i].Mass)
@@ -214,7 +217,7 @@ func (s *Simulation) UpdatePositionsAndVelocities() {
 
 // SavePositionSnapshot stores the current positions.
 //
-//go:noinline
+//go:inline
 func (s *Simulation) SavePositionSnapshot(step int) {
 	for i := 0; i < s.NumBodies; i++ {
 		s.PositionHistory[step][i] = s.Bodies[i].Position
@@ -231,10 +234,13 @@ func (s *Simulation) CalculateEnergy() float64 {
 
 		for j := i + 1; j < s.NumBodies; j++ {
 			rVec := sub(s.Bodies[j].Position, s.Bodies[i].Position)
-			distance := math.Sqrt(magnitudeSquared(rVec)) // Have to take sqrt for potential energy.
-			if distance > 1e-10 {
-				energy -= s.G * s.Bodies[i].Mass * s.Bodies[j].Mass / distance
+			rSquared := magnitudeSquared(rVec)
+			if rSquared < 1e-20 {
+				continue
 			}
+			// Optimization: Calculate inverse distance once
+			invDist := 1.0 / math.Sqrt(rSquared)
+			energy -= s.G * s.Bodies[i].Mass * s.Bodies[j].Mass * invDist
 		}
 	}
 	return energy
@@ -259,7 +265,7 @@ func (s *Simulation) RunSimulation(useParallel bool) time.Duration {
 }
 
 func main() {
-	numBodiesPtr := flag.Int("bodies", 1000, "Number of bodies")
+	numBodiesPtr := flag.Int("bodies", 2000, "Number of bodies")
 	numIterationsPtr := flag.Int("iterations", 1000, "Number of iterations")
 	dtPtr := flag.Float64("dt", 0.01, "Time step")
 	seedPtr := flag.Int64("seed", 42, "Random seed")

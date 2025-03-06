@@ -11,6 +11,15 @@ from mpl_toolkits.mplot3d import Axes3D
 import argparse
 import sys
 
+# Try to import numba, but make it optional
+try:
+    import numba
+
+    HAVE_NUMBA = True
+except ImportError:
+    HAVE_NUMBA = False
+    print("Numba not available. Using NumPy-only implementation.")
+
 
 class NBodySimulation:
     def __init__(self, num_bodies=1000, num_iterations=1000, dt=0.01, seed=42):
@@ -45,40 +54,57 @@ class NBodySimulation:
         # Store position history for visualization
         self.position_history = []
 
+        # Flag to choose computation method
+        self.use_numba = HAVE_NUMBA
+
     def compute_forces(self):
         """
         Compute the gravitational forces between all pairs of bodies.
-        Optimized to compute each pair only once and apply Newton's third law.
+        Uses either vectorized NumPy operations or Numba JIT compilation if available.
 
         Returns:
             forces: Array of forces for each body
         """
-        # Reset forces array
+        if self.use_numba and HAVE_NUMBA:
+            # Use Numba JIT-compiled function for parallel execution
+            self.forces = compute_forces_numba(self.positions, self.masses, self.G)
+        else:
+            # Use vectorized NumPy operations
+            self.compute_forces_numpy()
+
+        return self.forces
+
+    def compute_forces_numpy(self):
+        """
+        Compute forces using vectorized NumPy operations.
+        This avoids the O(N^2) nested loop problem.
+        """
+        # Reset forces
         self.forces.fill(0.0)
 
-        # Compute pairwise forces (optimized N² algorithm)
-        for i in range(self.num_bodies):
-            for j in range(i + 1, self.num_bodies):  # Only compute each pair once
-                # Vector from body i to body j
-                r_vec = self.positions[j] - self.positions[i]
-                # Distance squared
-                r_squared = np.sum(r_vec * r_vec)
-                # Avoid division by zero or extremely small values
-                if r_squared < 1e-20:
-                    continue
+        # Compute pairwise displacement vectors (NxNx3)
+        delta_r = self.positions[:, np.newaxis, :] - self.positions[np.newaxis, :, :]
 
-                # Distance
-                r = np.sqrt(r_squared)
+        # Compute squared distances (NxN matrix)
+        r_squared = (
+            np.sum(delta_r**2, axis=2) + 1e-20
+        )  # Add small value to avoid division by zero
 
-                # Calculate gravitational force magnitude
-                force_mag = self.G * self.masses[i] * self.masses[j] / r_squared
+        # Create mask for i != j to avoid self-interactions
+        mask = ~np.eye(self.num_bodies, dtype=bool)
 
-                # Force vector (direction from i to j)
-                force_vec = force_mag * r_vec / r
+        # Compute inverse distances (NxN matrix)
+        inv_r = np.zeros_like(r_squared)
+        inv_r[mask] = 1.0 / np.sqrt(r_squared[mask])
 
-                # Apply Newton's third law: equal and opposite forces
-                self.forces[i] += force_vec
-                self.forces[j] -= force_vec  # Opposite direction
+        # Compute force magnitudes (NxN matrix)
+        force_mag = self.G * np.outer(self.masses, self.masses) * inv_r**3
+
+        # Compute force vectors (NxNx3)
+        force_vec = force_mag[:, :, np.newaxis] * delta_r
+
+        # Sum forces along axis=1 to get total force per body
+        self.forces = np.sum(force_vec, axis=1)
 
         return self.forces
 
@@ -191,6 +217,54 @@ class NBodySimulation:
         plt.close()
 
 
+# Only define the Numba function if Numba is available
+if HAVE_NUMBA:
+
+    @numba.njit(parallel=True)
+    def compute_forces_numba(positions, masses, G):
+        """
+        Compute forces using Numba's parallel JIT compilation.
+
+        Args:
+            positions: Array of body positions
+            masses: Array of body masses
+            G: Gravitational constant
+
+        Returns:
+            forces: Array of forces for each body
+        """
+        num_bodies = positions.shape[0]
+        forces = np.zeros_like(positions)
+
+        # Compute forces in parallel
+        for i in numba.prange(num_bodies):
+            for j in range(num_bodies):
+                if i != j:
+                    # Vector from body i to body j
+                    r_vec = positions[j] - positions[i]
+
+                    # Distance squared
+                    r_squared = np.sum(r_vec * r_vec)
+
+                    # Avoid division by zero
+                    if r_squared < 1e-20:
+                        continue
+
+                    # Distance
+                    r = np.sqrt(r_squared)
+
+                    # Force magnitude
+                    force_mag = G * masses[i] * masses[j] / r_squared
+
+                    # Force vector
+                    force_vec = force_mag * r_vec / r
+
+                    # Add force to body i
+                    forces[i] += force_vec
+
+        return forces
+
+
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -200,7 +274,7 @@ def parse_args():
     parser.add_argument(
         "--bodies",
         type=int,
-        default=1000,
+        default=2000,
         help="Number of bodies to simulate (default: 1000)",
     )
     parser.add_argument(
@@ -226,6 +300,11 @@ def parse_args():
     parser.add_argument(
         "--output", type=str, default=None, help="Output filename for visualization"
     )
+    parser.add_argument(
+        "--no-numba",
+        action="store_true",
+        help="Disable Numba JIT compilation (use NumPy only)",
+    )
 
     return parser.parse_args()
 
@@ -243,6 +322,10 @@ def main():
         seed=args.seed,
     )
 
+    # Set computation method
+    if args.no_numba:
+        sim.use_numba = False
+
     # Calculate initial energy
     initial_energy = sim.calculate_energy()
     print(f"Initial system energy: {initial_energy:.6e}")
@@ -257,6 +340,10 @@ def main():
 
     # Print execution information
     print("Python NumPy Implementation")
+    if sim.use_numba:
+        print("Acceleration: Numba JIT with parallel execution")
+    else:
+        print("Acceleration: NumPy vectorization")
     print(f"Number of bodies: {args.bodies}")
     print(f"Number of iterations: {args.iterations}")
     print(f"Time step: {args.dt}")
