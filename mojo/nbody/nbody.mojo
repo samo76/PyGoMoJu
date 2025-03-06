@@ -91,7 +91,8 @@ struct NBodySimulation:
 
         # Initialize bodies randomly
         random_seed(42)
-        for i in range(num_bodies):
+        var i = 0
+        while i < num_bodies:
             # Generate random position
             var position = SIMD[DType.float64, 4](
                 random_float64() * 2e10 - 1e10,  # x
@@ -113,6 +114,7 @@ struct NBodySimulation:
 
             # Create and add the body
             self.bodies.append(Body(position, velocity, mass))
+            i += 1
 
     fn compute_forces(mut self):
         """Compute gravitational forces between all pairs of bodies."""
@@ -220,8 +222,8 @@ fn main():
     print("Starting N-body simulation...")
 
     # Configuration parameters
-    var num_bodies = 1000
-    var iterations = 100
+    var num_bodies = 2000
+    var iterations = 1000
     var dt = 0.01
 
     # Create and run the simulation
@@ -243,5 +245,5 @@ fn main():
     print("Mojo Implementation (SIMD-optimized)")
     print("Number of bodies:", num_bodies)
     print("Number of iterations:", iterations)
-    print("Execution time:", execution_time, "seconds")
+    print("Execution time:", execution_time, "milliseconds")
     print("Done")
