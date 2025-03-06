@@ -1,6 +1,18 @@
 # PyGoMo: N-Body Simulation Benchmark
 
-A comparative benchmark of N-body gravitational simulation implemented in Python, Go, and Mojo/Max to evaluate their performance characteristics for computationally intensive floating-point operations.
+A comparative benchmark of N-body gravitational simulation implemented in Python, Go, and Mojo to evaluate their performance characteristics for computationally intensive floating-point operations.
+
+## Benchmark Results
+
+![Benchmark Comparison](benchmark/benchmark_comparison.png)
+
+The benchmark results show significant performance differences between the three implementations:
+
+- **Python**: ~179 seconds (baseline)
+- **Go**: ~7.8 seconds (~23x faster than Python)
+- **Mojo**: ~7.2 seconds (~25x faster than Python)
+
+These results were obtained by running the simulation with 2000 bodies for 1000 iterations on the same hardware.
 
 ## Overview
 
@@ -72,20 +84,22 @@ All implementations include these key optimizations:
 
 1. **Python**: Uses NumPy for efficient array operations
 2. **Go**: Leverages goroutines for parallel execution
-3. **Mojo/Max**: Utilizes SIMD vectorization and parallelization features
+3. **Mojo**: Utilizes SIMD vectorization and parallelization features
 
 ## Project Structure
 
 ```
 PyGoMo/
 ├── python/           # Python implementation
-│   └── nbody.py      # N-body simulation in Python with NumPy
+│   └── nbody.py      # N-body simulation in Python with NumPy/Numba
 ├── go/               # Go implementation
 │   └── nbody.go      # N-body simulation in Go with goroutines
 ├── mojo/             # Mojo implementation
 │   └── nbody.mojo    # N-body simulation in Mojo with SIMD
-└── benchmark/        # Benchmarking tools
-    └── benchmark.py  # Script to run and compare implementations
+├── benchmark/        # Benchmarking tools
+│   ├── benchmark.py  # Script to run and compare implementations
+│   └── visualize_results.py  # Script to visualize benchmark results
+└── run_benchmarks.sh # Shell script to run all benchmarks
 ```
 
 ## Requirements
@@ -96,6 +110,7 @@ PyGoMo/
 - NumPy
 - Matplotlib
 - Pandas
+- Numba (optional, for JIT compilation and parallelization)
 
 ### Go
 
@@ -103,126 +118,68 @@ PyGoMo/
 
 ### Mojo
 
-- Mojo/Max SDK
+- Mojo SDK
 
-## Running the Benchmark
+## Running the Benchmarks
 
 To run the benchmark comparison across all implementations:
 
 ```bash
 cd PyGoMo
-python benchmark/benchmark.py
+./run_benchmarks.sh
 ```
 
 The benchmark will:
 
-1. Run each implementation with varying numbers of bodies (100, 500, 1000, 2000)
+1. Run each implementation with the specified number of bodies and iterations
 2. Measure and compare execution times
-3. Generate visualization of performance results
-4. Output a summary table of relative performance
+3. Save the results to a CSV file
+
+To visualize the benchmark results:
+
+```bash
+cd PyGoMo
+python benchmark/visualize_results.py
+```
+
+This will generate a professional visualization of the benchmark results, saved as both PNG and PDF files.
 
 ## Implementation Details
 
 ### Python Implementation
 
-The Python implementation uses NumPy for efficient array operations and employs optimized loops for the force calculations. While NumPy provides significant advantages over pure Python, it still faces limitations in parallelism for this specific algorithm.
+The Python implementation offers two acceleration methods:
+
+1. **NumPy Vectorization**: Uses NumPy broadcasting for efficient array operations
+2. **Numba JIT Compilation**: Optional acceleration with Numba's just-in-time compilation and parallelization
 
 Key optimizations:
 
-- Store forces as a class member to avoid reallocating arrays
-- Use `np.sum()` for vector dot products instead of `np.linalg.norm()` where possible
-- Optimize the force calculation loop to only compute each pair once
-
-Key code snippet for force calculation:
-
-```python
-# Vector from body i to body j
-r_vec = self.positions[j] - self.positions[i]
-# Distance squared
-r_squared = np.sum(r_vec * r_vec)
-# Calculate gravitational force
-force_mag = self.G * self.masses[i] * self.masses[j] / r_squared
-# Force vector (direction from i to j)
-force_vec = force_mag * r_vec / np.sqrt(r_squared)
-# Apply Newton's third law: equal and opposite forces
-self.forces[i] += force_vec
-self.forces[j] -= force_vec  # Opposite direction
-```
+- Vectorized force calculations using NumPy broadcasting
+- Parallel execution with Numba when available
+- Optimized memory usage and array operations
 
 ### Go Implementation
 
-The Go implementation uses goroutines to parallelize the force calculations across available CPU cores. The code splits the bodies into batches and processes each batch in a separate goroutine, leveraging Go's lightweight concurrency model.
+The Go implementation uses goroutines to parallelize the force calculations across available CPU cores.
 
 Key optimizations:
 
-- Added `MagnitudeSquared()` method to avoid unnecessary square root calculations
-- Improved parallel implementation to divide work more efficiently among goroutines
-- Use mutex for thread-safe force updates
+- Efficient parallel implementation using goroutines
+- Optimized vector operations
+- Cache-friendly data structures
+- Mutex-free force updates for better performance
 
-Key code snippet for force calculation:
+### Mojo Implementation
 
-```go
-// Vector from body i to body j
-rVec := s.Bodies[j].Position.Sub(s.Bodies[i].Position)
-// Distance squared (more efficient than computing magnitude directly)
-rSquared := rVec.MagnitudeSquared()
-// Calculate gravitational force magnitude
-forceMag := s.G * s.Bodies[i].Mass * s.Bodies[j].Mass / rSquared
-// Force vector (direction from i to j)
-forceVec := rVec.Normalize().MulScalar(forceMag)
-// Apply Newton's third law: equal and opposite forces
-s.Bodies[i].Force = s.Bodies[i].Force.Add(forceVec)
-s.Bodies[j].Force = s.Bodies[j].Force.Sub(forceVec) // Opposite direction
-```
-
-### Mojo/Max Implementation
-
-The Mojo implementation is designed to showcase the language's SIMD and parallelism capabilities. It uses:
-
-1. SIMD-friendly data layout with separate arrays for x, y, z components
-2. Explicit parallelization through the `parallelize` function
-3. Vectorized operations where possible
+The Mojo implementation showcases the language's SIMD and parallelism capabilities.
 
 Key optimizations:
 
-- Use SIMD operations for vector calculations
-- Leverage Mojo's built-in parallelization capabilities
-- Use `@value` attribute for efficient memory layout
-
-Key code snippet for force calculation:
-
-```mojo
-# Vector from body i to body j
-r_vec = body_j.position - body_i.position
-# Distance squared (using SIMD dot product)
-r_squared = (r_vec * r_vec).reduce_add()
-# Force magnitude
-force_mag = G * body_i.mass * body_j.mass / r_squared
-# Force vector (direction from i to j, normalized by distance)
-force_vec = r_vec * (force_mag / sqrt(r_squared))
-# Apply Newton's third law: equal and opposite forces
-body_i.force += force_vec
-body_j.force -= force_vec  # Opposite direction
-```
-
-## Expected Results
-
-Typically, the performance ranking from fastest to slowest is:
-
-1. Mojo/Max (fastest)
-2. Go
-3. Python (slowest)
-
-The Mojo implementation generally demonstrates significant speedup (often 10-100x) over Python due to its compiled nature and SIMD optimizations. Go usually sits between Mojo and Python in performance.
-
-## Energy Conservation
-
-All implementations track energy conservation as a way to verify simulation accuracy. The total energy of the system (kinetic + potential) should remain relatively constant throughout the simulation. Each implementation calculates:
-
-- Kinetic energy: 0.5 *m* v²
-- Potential energy: -G *m₁* m₂ / r
-
-The difference between initial and final energy is reported to verify simulation correctness.
+- SIMD-friendly data layout
+- Explicit parallelization
+- Vectorized operations
+- Efficient memory management
 
 ## Customizing the Simulation
 
@@ -233,21 +190,13 @@ Each implementation accepts command-line parameters to adjust:
 - Time step (dt)
 - Random seed (for reproducibility)
 
-Example with Python:
+Example:
 
 ```bash
 cd PyGoMo
-python python/nbody.py --bodies 2000 --iterations 500
+python python/nbody.py --bodies 2000 --iterations 1000
 ```
-
-## Visualization
-
-The Python implementation includes optional visualization of particle trajectories using Matplotlib. The benchmark script also generates comparative charts of performance metrics.
 
 ## License
 
 [MIT License](LICENSE)
-
-## Contributing
-
-Contributions are welcome! Feel free to submit issues or pull requests.
