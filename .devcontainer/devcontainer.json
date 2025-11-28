@@ -1,0 +1,25 @@
+{
+	"name": "PyGoMoJu",
+	"image": "mcr.microsoft.com/devcontainers/base:trixie",
+	"features": {
+		"ghcr.io/devcontainers/features/go:1": {
+			"version": "1.25.4"
+		},
+		"ghcr.io/devcontainers/features/python:1": {
+			"version": "3.13"
+		},
+		"ghcr.io/julialang/devcontainer-features/julia:1": {
+			"channel": "1.12.2"
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"julialang.language-julia",
+				"ms-python.python",
+				"golang.go",
+				"modular-mojotools.vscode-mojo"
+			]
+		}
+	}
+}
