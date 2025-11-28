@@ -19,7 +19,11 @@
 				"ms-python.python",
 				"golang.go",
 				"modular-mojotools.vscode-mojo"
-			]
+			],
+			"settings": {
+				"julia.environmentPath": "${containerWorkspaceFolder}/julia",
+    			"julia.languageServerJuliaupChannel": "1.12.2"
+			}
 		}
 	}
 }
