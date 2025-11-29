@@ -12,6 +12,9 @@
 			"channel": "1.12.2"
 		}
 	},
+	"containerEnv":{
+		"JULIA_DEPOT": "${containerWorkspaceFolder}/.julia"
+	},
 	"customizations": {
 		"vscode": {
 			"extensions": [
