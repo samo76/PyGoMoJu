@@ -28,5 +28,6 @@
     			"julia.languageServerJuliaupChannel": "1.12.2"
 			}
 		}
-	}
+	},
+	"onCreateCommand": "bash .devcontainer/onCreateCommand.sh"
 }
