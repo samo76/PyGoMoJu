@@ -1,5 +1,10 @@
 #!/usr/bin/bash
 
+# Create venv
+python3 -m venv .venv
+
+source .venv/bin/activate
+
 # Install python requirements
 pip install -r python/requirements.txt
 

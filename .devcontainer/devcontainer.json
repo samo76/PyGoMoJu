@@ -12,9 +12,13 @@
 			"channel": "1.12.2"
 		}
 	},
-	"containerEnv":{
-		"JULIA_DEPOT": "${containerWorkspaceFolder}/.julia"
-	},
+	"mounts": [
+		{
+			"source": "julia_depot",
+			"target": "/home/vscode/.julia",
+			"type": "volume"
+		}
+	],
 	"customizations": {
 		"vscode": {
 			"extensions": [
