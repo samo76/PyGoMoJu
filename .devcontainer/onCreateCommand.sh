@@ -12,4 +12,4 @@ pip install -r python/requirements.txt
 pip install mojo
 
 # Instantiate julia depot
-julia --project=julia/ -E "using Pkg; Pkg.instantiate()"
+julia -E "using Pkg; Pkg.add(\"StaticArrays\")"
