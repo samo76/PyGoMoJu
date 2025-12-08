@@ -3,55 +3,14 @@ from random import random_float64, seed as random_seed
 from time import monotonic as time_now
 from collections import List
 
-
 # Constants
 alias G = 6.67430e-11  # Gravitational constant
-
-
-# ------------------------------------------------------
-# Vector3
-# ------------------------------------------------------
-struct Vector3:
-    var x: Float64
-    var y: Float64
-    var z: Float64
-
-    fn __init__(mut self, x: Float64 = 0.0, y: Float64 = 0.0, z: Float64 = 0.0):
-        self.x = x
-        self.y = y
-        self.z = z
-
-    fn __copyinit__(mut self, other: Self):
-        self.x = other.x
-        self.y = other.y
-        self.z = other.z
-
-    fn __moveinit__(mut self, owned other: Self):
-        self.x = other.x
-        self.y = other.y
-        self.z = other.z
-
-    fn __eq__(self, other: Self) -> Bool:
-        return self.x == other.x and self.y == other.y and self.z == other.z
-
-    fn add(self, other: Self) -> Self:
-        return Self(self.x + other.x, self.y + other.y, self.z + other.z)
-
-    fn sub(self, other: Self) -> Self:
-        return Self(self.x - other.x, self.y - other.y, self.z - other.z)
-
-    fn scalar_mul(self, s: Float64) -> Self:
-        return Self(self.x * s, self.y * s, self.z * s)
-
-    fn magnitude(self) -> Float64:
-        return sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
-
 
 # ------------------------------------------------------
 # Body
 # ------------------------------------------------------
-@value
-struct Body:
+@fieldwise_init
+struct Body(ImplicitlyCopyable, Movable):
     """A celestial body with position, velocity, mass and force."""
 
     var position: SIMD[DType.float64, 4]  # Using SIMD for position (x,y,z,0)
@@ -60,7 +19,7 @@ struct Body:
     var force: SIMD[DType.float64, 4]  # Using SIMD for force (fx,fy,fz,0)
 
     fn __init__(
-        mut self,
+        out self,
         position: SIMD[DType.float64, 4],
         velocity: SIMD[DType.float64, 4],
         mass: Float64,
@@ -74,6 +33,7 @@ struct Body:
 # ------------------------------------------------------
 # NBodySimulation
 # ------------------------------------------------------
+@fieldwise_init
 struct NBodySimulation:
     """N-body simulation using Newtonian gravitational physics with SIMD optimizations.
     """
@@ -82,7 +42,7 @@ struct NBodySimulation:
     var num_bodies: Int
     var dt: Float64
 
-    fn __init__(mut self, num_bodies: Int, dt: Float64):
+    fn __init__(out self, num_bodies: Int, dt: Float64):
         """Initialize the N-body simulation with random positions, velocities, and masses.
         """
         self.num_bodies = num_bodies
@@ -188,7 +148,7 @@ struct NBodySimulation:
 
         # Calculate execution time in seconds
         var end_time = time_now()
-        return end_time - start_time  # Time in seconds
+        return (end_time - start_time) * 1e-9  # Time in seconds
 
     fn calculate_energy(self) -> Float64:
         """Calculate the total energy of the system (kinetic + potential)."""
@@ -245,5 +205,5 @@ fn main():
     print("Mojo Implementation (SIMD-optimized)")
     print("Number of bodies:", num_bodies)
     print("Number of iterations:", iterations)
-    print("Execution time:", execution_time, "milliseconds")
+    print("Execution time:", execution_time, "seconds")
     print("Done")
