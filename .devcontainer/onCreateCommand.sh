@@ -9,7 +9,7 @@ source .venv/bin/activate
 pip install -r python/requirements.txt
 
 # Install Mojo
-pip install mojo
+pip install mojo==0.25.7.0
 
 # Instantiate julia depot
-julia -E "using Pkg; Pkg.add(\"StaticArrays\")"
+julia --project=julia/ -E "using Pkg; Pkg.instantiate()"
