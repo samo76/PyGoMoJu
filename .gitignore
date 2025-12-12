@@ -177,3 +177,6 @@ go/nbody_bin
 
 .julia/
 
+kgen.trace.json*
+
+benchmark/data.csv
