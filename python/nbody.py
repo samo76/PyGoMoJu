@@ -305,6 +305,12 @@ def parse_args():
         action="store_true",
         help="Disable Numba JIT compilation (use NumPy only)",
     )
+    parser.add_argument(
+        "--benchmark_csv",
+        type=str,
+        help="Print execution time in CSV file",
+        default=""
+    )
 
     return parser.parse_args()
 
@@ -358,6 +364,11 @@ def main():
             print(f"Visualization saved to {args.output}")
         else:
             print("Visualization saved to nbody_python_visualization.png")
+    
+    # Write execution time to csv file
+    if len(args.benchmark_csv) > 0:
+        with open(args.benchmark_csv, "a") as f:
+            f.write(f"python,{execution_time:.4f}\n")
 
 
 if __name__ == "__main__":

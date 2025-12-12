@@ -188,23 +188,26 @@ fn main():
     if len(args) > 1:
         try:
             num_bodies = atol(args[1])
-        except e:
+        except _:
             print("Cannot parse num_bodies value:", args[1])
             return
     var iterations = 1000
     if len(args) > 2:
         try:
             iterations = atol(args[2])
-        except e:
+        except _:
             print("Cannot parse iterations value:", args[2])
             return
     var dt = 0.01
     if len(args) > 3:
         try:
             dt = atof(args[3])
-        except e:
+        except _:
             print("Cannot parse iterations dt:", args[3])
             return
+    var benchmark_csv = ""
+    if len(args) > 4:
+        benchmark_csv = args[4]
 
     # Create and run the simulation
     var simulation = NBodySimulation(num_bodies, dt)
@@ -228,3 +231,12 @@ fn main():
     print("Time step:", dt)
     print("Execution time:", execution_time, "seconds")
     print("Done")
+
+    # Write execution time to CSV file
+    if len(benchmark_csv) > 0:
+        try:
+            with open(benchmark_csv, "a") as f:
+                f.write("mojo,{}\n".format(execution_time))
+        except _:
+            print("Cannot open CSV file")
+            return

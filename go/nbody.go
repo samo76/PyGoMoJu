@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -270,6 +272,7 @@ func main() {
 	dtPtr := flag.Float64("dt", 0.01, "Time step")
 	seedPtr := flag.Int64("seed", 42, "Random seed")
 	parallelPtr := flag.Bool("parallel", true, "Use parallel execution")
+	benchmark_csv := flag.String("benchmark_csv", "", "Print execution time in CSV file")
 	flag.Parse()
 
 	sim := NewSimulation(*numBodiesPtr, *numIterationsPtr, *dtPtr, *seedPtr)
@@ -292,4 +295,24 @@ func main() {
 	fmt.Printf("Number of iterations: %d\n", *numIterationsPtr)
 	fmt.Printf("Number of CPUs: %d\n", runtime.NumCPU())
 	fmt.Printf("Execution time: %.4f seconds\n", executionTime.Seconds())
+
+	if len(*benchmark_csv) > 0 {
+		// Open the file for appending or create it if it doesn't exist
+		file, err := os.OpenFile(*benchmark_csv, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Println("Error opening file:", err)
+			return
+		}
+		defer file.Close()
+
+		// Convert the float to a string
+		floatString := strconv.FormatFloat(executionTime.Seconds(), 'f', 6, 64)
+
+		// Write the float to the file followed by a newline
+		_, err = fmt.Fprintf(file, "go,%s\n", floatString)
+		if err != nil {
+			fmt.Println("Error writing to file:", err)
+			return
+		}
+	}
 }

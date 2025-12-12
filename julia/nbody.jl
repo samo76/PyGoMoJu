@@ -172,6 +172,7 @@ function (@main)(args)
     num_bodies = length(args) > 0 ? parse(Int, args[1]) : 2000
     iterations = length(args) > 1 ? parse(Int, args[2]) : 1000
     dt = length(args) > 2 ? parse(Float64, args[3]) : 0.01
+    benchmark_csv = length(args) > 3 ? args[4] : ""
 
     # Create and run the simulation
     simulation = NBodySimulation(num_bodies, dt)
@@ -195,4 +196,9 @@ function (@main)(args)
     println("Time step: ", dt)
     @printf "Execution time: %.4f seconds\n" execution_time
     println("Done")
+
+    # Open the file for appending, or create it if it doesn't exist
+    !isempty(benchmark_csv) && open(benchmark_csv, "a")  do f
+        @printf f "julia,%.6f\n" execution_time
+    end
 end
