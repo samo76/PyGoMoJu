@@ -2,6 +2,7 @@ from math import sqrt
 from random import random_float64, seed as random_seed
 from time import monotonic as time_now
 from collections import List
+from sys import argv
 
 # Constants
 alias G = 6.67430e-11  # Gravitational constant
@@ -181,10 +182,29 @@ struct NBodySimulation:
 fn main():
     print("Starting N-body simulation...")
 
+    args = argv()
     # Configuration parameters
     var num_bodies = 2000
+    if len(args) > 1:
+        try:
+            num_bodies = atol(args[1])
+        except e:
+            print("Cannot parse num_bodies value:", args[1])
+            return
     var iterations = 1000
+    if len(args) > 2:
+        try:
+            iterations = atol(args[2])
+        except e:
+            print("Cannot parse iterations value:", args[2])
+            return
     var dt = 0.01
+    if len(args) > 3:
+        try:
+            dt = atof(args[3])
+        except e:
+            print("Cannot parse iterations dt:", args[3])
+            return
 
     # Create and run the simulation
     var simulation = NBodySimulation(num_bodies, dt)
@@ -205,5 +225,6 @@ fn main():
     print("Mojo Implementation (SIMD-optimized)")
     print("Number of bodies:", num_bodies)
     print("Number of iterations:", iterations)
+    print("Time step:", dt)
     print("Execution time:", execution_time, "seconds")
     print("Done")
