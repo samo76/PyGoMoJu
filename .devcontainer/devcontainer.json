@@ -29,7 +29,8 @@
 			],
 			"settings": {
 				"julia.environmentPath": "${containerWorkspaceFolder}/julia",
-    			"julia.languageServerJuliaupChannel": "1.12.2"
+    			"julia.languageServerJuliaupChannel": "1.12.2",
+				"remote.autoForwardPorts": false
 			}
 		}
 	},
