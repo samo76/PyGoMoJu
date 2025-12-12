@@ -164,13 +164,14 @@ end
 # ------------------------------------------------------
 # main
 # ------------------------------------------------------
-function main()
+function (@main)(args)
+    
     println("Starting N-body simulation...")
 
     # Configuration parameters
-    num_bodies = 2000
-    iterations = 1000
-    dt = 0.01
+    num_bodies = length(args) > 0 ? parse(Int, args[1]) : 2000
+    iterations = length(args) > 1 ? parse(Int, args[2]) : 1000
+    dt = length(args) > 2 ? parse(Float64, args[3]) : 0.01
 
     # Create and run the simulation
     simulation = NBodySimulation(num_bodies, dt)
@@ -190,7 +191,8 @@ function main()
     # Print performance results
     println("Julia Implementation")
     println("Number of bodies: ", num_bodies)
-    println("Number of iterations:", iterations)
+    println("Number of iterations: ", iterations)
+    println("Time step: ", dt)
     @printf "Execution time: %.4f seconds\n" execution_time
     println("Done")
 end
